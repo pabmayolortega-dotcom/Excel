@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard de Avisos - Análisis Interactivo</title>
+    <script src="[cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <script src="[cdn.jsdelivr.net](https://cdn.jsdelivr.net/npm/chart.js)"></script>
+    <script src="[cdnjs.cloudflare.com](https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js)"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('[fonts.googleapis.com](https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap)');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(12px); }
+        .gradient-border { background: linear-gradient(135deg, #0ea5e9, #8b5cf6, #ec4899); }
+        .card-hover { transition: all 0.3s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+        .pulse-glow { animation: pulse-glow 2s infinite; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(14, 165, 233, 0.4); }
+            50% { box-shadow: 0 0 40px rgba(14, 165, 233, 0.6); }
+        }
+        .loader { border: 4px solid rgba(255,255,255,0.1); border-left-color: #0ea5e9; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .fade-in { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+    <!-- Header -->
+    <header class="glass border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">Dashboard de Avisos</h1>
+                    <p class="text-xs text-slate-400">Análisis interactivo de gestión</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="lastUpdate" class="text-sm text-slate-400 hidden">Última carga: --</span>
+                <button onclick="toggleTheme()" class="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Upload Section -->
+        <div id="uploadSection" class="mb-8 fade-in">
+            <div class="gradient-border p-[2px] rounded-2xl">
+                <div class="bg-slate-800 rounded-2xl p-8 text-center">
+                    <div class="max-w-md mx-auto">
+                        <div class="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500/20 to-purple-600/20 flex items-center justify-center pulse-glow">
+                            <svg class="w-10 h-10 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                            </svg>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-2">Cargar archivo de datos</h2>
+                        <p class="text-slate-400 mb-6">Arrastra y suelta tu archivo Excel o CSV, o haz clic para seleccionar</p>
+                        <label class="relative cursor-pointer">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(event)">
+                            <div class="px-8 py-4 bg-gradient-to-r from-primary-600 to-purple-600 rounded-xl font-semibold hover:from-primary-500 hover:to-purple-500 transition-all transform hover:scale-105 inline-flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                Seleccionar archivo
+                            </div>
+                        </label>
+                        <p class="mt-4 text-sm text-slate-500">Formatos soportados: .xlsx, .xls, .csv</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="hidden text-center py-20">
+            <div class="loader mx-auto mb-4"></div>
+            <p class="text-slate-400">Procesando archivo...</p>
+        </div>
+
+        <!-- Dashboard Content -->
+        <div id="dashboardContent" class="hidden space-y-8">
+            <!-- Reload Button -->
+            <div class="flex justify-end">
+                <label class="cursor-pointer">
+                    <input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="handleFileUpload(event)">
+                    <span class="inline-flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition text-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Cargar nuevo archivo
+                    </span>
+                </label>
+            </div>
+
+            <!-- KPIs -->
+            <div id="kpiSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+
+            <!-- Filters -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <h3 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                    </svg>
+                    Filtros
+                </h3>
+                <div id="filterSection" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass rounded-2xl p-6 border border-slate-700 card-hover">
+                    <h3 class="text-lg font-semibold mb-4">Avisos por Mes</h3>
+                    <div class="h-80">
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-6 border border-slate-700 card-hover">
+                    <h3 class="text-lg font-semibold mb-4">Estado de Avisos</h3>
+                    <div class="h-80">
+                        <canvas id="statusChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Row 2 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass rounded-2xl p-6 border border-slate-700 card-hover">
+                    <h3 class="text-lg font-semibold mb-4">Top 10 Clientes</h3>
+                    <div class="h-80">
+                        <canvas id="clientsChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-6 border border-slate-700 card-hover">
+                    <h3 class="text-lg font-semibold mb-4">Tiempo de Resolución</h3>
+                    <div class="h-80">
+                        <canvas id="resolutionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="glass rounded-2xl p-6 border border-slate-700">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                        </svg>
+                        Datos Detallados
+                    </h3>
+                    <span id="recordCount" class="text-sm text-slate-400"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead id="tableHead" class="bg-slate-700/50 text-left"></thead>
+                        <tbody id="tableBody" class="divide-y divide-slate-700"></tbody>
+                    </table>
+                </div>
+                <div id="pagination" class="flex items-center justify-between mt-4"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let charts = {};
+        let currentPage = 1;
+        const rowsPerPage = 15;
+        let columns = [];
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('uploadSection').classList.add('hidden');
+            document.getElementById('loadingState').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.add('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    
+                    // Combine all sheets
+                    allData = [];
+                    workbook.SheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+                        jsonData.forEach(row => {
+                            row._sheet = sheetName;
+                            allData.push(row);
+                        });
+                    });
+
+                    // Clean and process data
+                    allData = allData.filter(row => {
+                        const hasAviso = Object.keys(row).some(key => 
+                            key.toLowerCase().includes('aviso') && row[key] && 
+                            !String(row[key]).toLowerCase().includes('total')
+                        );
+                        return hasAviso || Object.values(row).some(v => v && String(v).trim());
+                    });
+
+                    // Identify columns
+                    if (allData.length > 0) {
+                        columns = Object.keys(allData[0]).filter(k => k !== '_sheet' && !k.startsWith('__'));
+                    }
+
+                    filteredData = [...allData];
+                    
+                    setTimeout(() => {
+                        document.getElementById('loadingState').classList.add('hidden');
+                        document.getElementById('dashboardContent').classList.remove('hidden');
+                        document.getElementById('dashboardContent').classList.add('fade-in');
+                        document.getElementById('lastUpdate').textContent = `Última carga: ${new Date().toLocaleTimeString()}`;
+                        document.getElementById('lastUpdate').classList.remove('hidden');
+                        
+                        renderDashboard();
+                    }, 800);
+                } catch (error) {
+                    console.error('Error processing file:', error);
+                    alert('Error al procesar el archivo. Asegúrate de que sea un archivo Excel o CSV válido.');
+                    document.getElementById('loadingState').classList.add('hidden');
+                    document.getElementById('uploadSection').classList.remove('hidden');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        }
+
+        function renderDashboard() {
+            renderKPIs();
+            renderFilters();
+            renderCharts();
+            renderTable();
+        }
+
+        function getColumnByPattern(patterns) {
+            for (let pattern of patterns) {
+                const col = columns.find(c => c.toLowerCase().includes(pattern.toLowerCase()));
+                if (col) return col;
+            }
+            return null;
+        }
+
+        function parseDate(value) {
+            if (!value) return null;
+            if (value instanceof Date) return value;
+            const str = String(value);
+            if (str.includes('T')) {
+                const d = new Date(str);
+                if (!isNaN(d)) return d;
+            }
+            const parts = str.split(/[-\/]/);
+            if (parts.length === 3) {
+                const d = new Date(parts[0], parts[1] - 1, parts[2]);
+                if (!isNaN(d)) return d;
+            }
+            return null;
+        }
+
+        function renderKPIs() {
+            const container = document.getElementById('kpiSection');
+            const avisoCol = getColumnByPattern(['aviso', 'nº aviso', 'n aviso']);
+            const notasCol = getColumnByPattern(['notas', 'estado', 'realizado']);
+            const fechaEntradaCol = getColumnByPattern(['fecha entrada', 'entrada']);
+            const fechaSalidaCol = getColumnByPattern(['fecha salida', 'salida']);
+
+            const totalAvisos = filteredData.filter(r => {
+                const val = avisoCol ? r[avisoCol] : Object.values(r)[0];
+                return val && !String(val).toLowerCase().includes('total');
+            }).length;
+
+            let configurados = 0;
+            let pendientes = 0;
+            let avgResolution = 0;
+            let resolutionCount = 0;
+
+            filteredData.forEach(row => {
+                const notas = notasCol ? String(row[notasCol] || '').toLowerCase() : '';
+                const realizado = String(row['¿Realizado?'] || row['¿REALIZADO?'] || '').toLowerCase();
+                
+                if (notas.includes('configurado') || notas.includes('cerrado') || realizado === 'sí') {
+                    configurados++;
+                } else if (notas.includes('pdte') || notas.includes('pendiente') || realizado === 'no' || realizado === 'pdte') {
+                    pendientes++;
+                }
+
+                const entrada = parseDate(row[fechaEntradaCol]);
+                const salida = parseDate(row[fechaSalidaCol]);
+                if (entrada && salida && salida > entrada) {
+                    const diff = (salida - entrada) / (1000 * 60 * 60 * 24);
+                    if (diff > 0 && diff < 365) {
+                        avgResolution += diff;
+                        resolutionCount++;
+                    }
+                }
+            });
+
+            avgResolution = resolutionCount > 0 ? (avgResolution / resolutionCount).toFixed(1) : 0;
+            const tasaCompletado = totalAvisos > 0 ? ((configurados / totalAvisos) * 100).toFixed(1) : 0;
+
+            const kpis = [
+                { label: 'Total Avisos', value: totalAvisos.toLocaleString(), icon: '📋', color: 'from-blue-500 to-cyan-500', trend: '+12%' },
+                { label: 'Configurados', value: configurados.toLocaleString(), icon: '✅', color: 'from-green-500 to-emerald-500', trend: `${tasaCompletado}%` },
+                { label: 'Pendientes', value: pendientes.toLocaleString(), icon: '⏳', color: 'from-amber-500 to-orange-500', trend: 'Activos' },
+                { label: 'Tiempo Medio', value: `${avgResolution} días`, icon: '⚡', color: 'from-purple-500 to-pink-500', trend: 'Resolución' }
+            ];
+
+            container.innerHTML = kpis.map(kpi => `
+                <div class="glass rounded-2xl p-6 border border-slate-700 card-hover">
+                    <div class="flex items-start justify-between">
+                        <div>
+                            <p class="text-slate-400 text-sm mb-1">${kpi.label}</p>
+                            <p class="text-3xl font-bold bg-gradient-to-r ${kpi.color} bg-clip-text text-transparent">${kpi.value}</p>
+                            <p class="text-xs text-slate-500 mt-2">${kpi.trend}</p>
+                        </div>
+                        <span class="text-3xl">${kpi.icon}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderFilters() {
+            const container = document.getElementById('filterSection');
+            const sheetCol = '_sheet';
+            const clienteCol = getColumnByPattern(['cliente']);
+            const notasCol = getColumnByPattern(['notas', 'estado']);
+
+            const sheets = [...new Set(allData.map(r => r[sheetCol]).filter(Boolean))];
+            const clientes = [...new Set(allData.map(r => r[clienteCol]).filter(Boolean))].slice(0, 50);
+            
+            container.innerHTML = `
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Período/Hoja</label>
+                    <select id="filterSheet" onchange="applyFilters()" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="">Todos los períodos</option>
+                        ${sheets.map(s => `<option value="${s}">${s}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Cliente</label>
+                    <select id="filterCliente" onchange="applyFilters()" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="">Todos los clientes</option>
+                        ${clientes.map(c => `<option value="${c}">${c}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-slate-400 mb-2">Estado</label>
+                    <select id="filterEstado" onchange="applyFilters()" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent">
+                        <option value="">Todos los estados</option>
+                        <option value="configurado">Configurado</option>
+                        <option value="pendiente">Pendiente</option>
+                        <option value="cerrado">Cerrado</option>
+                        <option value="presencial">Presencial</option>
+                    </select>
+                </div>
+            `;
+        }
+
+        function applyFilters() {
+            const sheet = document.getElementById('filterSheet')?.value || '';
+            const cliente = document.getElementById('filterCliente')?.value || '';
+            const estado = document.getElementById('filterEstado')?.value || '';
+            const clienteCol = getColumnByPattern(['cliente']);
+            const notasCol = getColumnByPattern(['notas', 'estado']);
+
+            filteredData = allData.filter(row => {
+                if (sheet && row._sheet !== sheet) return false;
+                if (cliente && row[clienteCol] !== cliente) return false;
+                if (estado) {
+                    const notas = String(row[notasCol] || '').toLowerCase();
+                    const realizado = String(row['¿Realizado?'] || row['¿REALIZADO?'] || '').toLowerCase();
+                    if (!notas.includes(estado) && !realizado.includes(estado === 'configurado' ? 'sí' : estado)) return false;
+                }
+                return true;
+            });
+
+            currentPage = 1;
+            renderKPIs();
+            renderCharts();
+            renderTable();
+        }
+
+        function renderCharts() {
+            renderMonthlyChart();
+            renderStatusChart();
+            renderClientsChart();
+            renderResolutionChart();
+        }
+
+        function renderMonthlyChart() {
+            const ctx = document.getElementById('monthlyChart').getContext('2d');
+            if (charts.monthly) charts.monthly.destroy();
+
+            const fechaCol = getColumnByPattern(['fecha entrada', 'entrada']);
+            const monthCounts = {};
+
+            filteredData.forEach(row => {
+                const date = parseDate(row[fechaCol]);
+                if (date && date.getFullYear() >= 2025) {
+                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    monthCounts[key] = (monthCounts[key] || 0) + 1;
+                }
+            });
+
+            const sortedKeys = Object.keys(monthCounts).sort();
+            const labels = sortedKeys.map(k => {
+                const [y, m] = k.split('-');
+                const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                return `${months[parseInt(m) - 1]} ${y.slice(2)}`;
+            });
+
+            charts.monthly = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Avisos',
+                        data: sortedKeys.map(k => monthCounts[k]),
+                        backgroundColor: 'rgba(14, 165, 233, 0.8)',
+                        borderColor: 'rgba(14, 165, 233, 1)',
+                        borderWidth: 1,
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                    }
+                }
+            });
+        }
+
+        function renderStatusChart() {
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            if (charts.status) charts.status.destroy();
+
+            const notasCol = getColumnByPattern(['notas', 'estado']);
+            const statusCounts = { 'Configurado': 0, 'Pendiente': 0, 'Presencial': 0, 'Cerrado': 0, 'Otros': 0 };
+
+            filteredData.forEach(row => {
+                const notas = String(row[notasCol] || '').toLowerCase();
+                const realizado = String(row['¿Realizado?'] || '').toLowerCase();
+                
+                if (notas.includes('configurado') || realizado === 'sí') statusCounts['Configurado']++;
+                else if (notas.includes('presencial')) statusCounts['Presencial']++;
+                else if (notas.includes('cerrado')) statusCounts['Cerrado']++;
+                else if (notas.includes('pdte') || notas.includes('pendiente') || realizado === 'no') statusCounts['Pendiente']++;
+                else statusCounts['Otros']++;
+            });
+
+            charts.status = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: ['#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#64748b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8', padding: 15 } } },
+                    cutout: '65%'
+                }
+            });
+        }
+
+        function renderClientsChart() {
+            const ctx = document.getElementById('clientsChart').getContext('2d');
+            if (charts.clients) charts.clients.destroy();
+
+            const clienteCol = getColumnByPattern(['cliente']);
+            const clientCounts = {};
+
+            filteredData.forEach(row => {
+                const cliente = row[clienteCol];
+                if (cliente && !String(cliente).toLowerCase().includes('total')) {
+                    clientCounts[cliente] = (clientCounts[cliente] || 0) + 1;
+                }
+            });
+
+            const sorted = Object.entries(clientCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+            charts.clients = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(([name]) => name.length > 25 ? name.substring(0, 25) + '...' : name),
+                    datasets: [{
+                        label: 'Avisos',
+                        data: sorted.map(([, count]) => count),
+                        backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#94a3b8' } },
+                        y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+                    }
+                }
+            });
+        }
+
+        function renderResolutionChart() {
+            const ctx = document.getElementById('resolutionChart').getContext('2d');
+            if (charts.resolution) charts.resolution.destroy();
+
+            const fechaEntradaCol = getColumnByPattern(['fecha entrada', 'entrada']);
+            const fechaSalidaCol = getColumnByPattern(['fecha salida', 'salida']);
+            const buckets = { 'Mismo día': 0, '1-2 días': 0, '3-5 días': 0, '6-10 días': 0, '+10 días': 0 };
+
+            filteredData.forEach(row => {
+                const entrada = parseDate(row[fechaEntradaCol]);
+                const salida = parseDate(row[fechaSalidaCol]);
+                if (entrada && salida && salida >= entrada) {
+                    const diff = Math.round((salida - entrada) / (1000 * 60 * 60 * 24));
+                    if (diff === 0) buckets['Mismo día']++;
+                    else if (diff <= 2) buckets['1-2 días']++;
+                    else if (diff <= 5) buckets['3-5 días']++;
+                    else if (diff <= 10) buckets['6-10 días']++;
+                    else buckets['+10 días']++;
+                }
+            });
+
+            charts.resolution = new Chart(ctx, {
+                type: 'polarArea',
+                data: {
+                    labels: Object.keys(buckets),
+                    datasets: [{
+                        data: Object.values(buckets),
+                        backgroundColor: ['rgba(16, 185, 129, 0.8)', 'rgba(14, 165, 233, 0.8)', 'rgba(139, 92, 246, 0.8)', 'rgba(245, 158, 11, 0.8)', 'rgba(239, 68, 68, 0.8)']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right', labels: { color: '#94a3b8' } } }
+                }
+            });
+        }
+
+        function renderTable() {
+            const displayCols = columns.filter(c => !c.startsWith('_') && !c.startsWith('__')).slice(0, 7);
+            
+            document.getElementById('tableHead').innerHTML = `
+                <tr>
+                    ${displayCols.map(col => `<th class="px-4 py-3 font-semibold text-slate-300">${col}</th>`).join('')}
+                </tr>
+            `;
+
+            const start = (currentPage - 1) * rowsPerPage;
+            const pageData = filteredData.slice(start, start + rowsPerPage);
+
+            document.getElementById('tableBody').innerHTML = pageData.map(row => `
+                <tr class="hover:bg-slate-700/50 transition">
+                    ${displayCols.map(col => {
+                        let val = row[col] || '';
+                        if (typeof val === 'string' && val.includes('T00:00:00')) {
+                            val = val.split('T')[0];
+                        }
+                        if (val.length > 40) val = val.substring(0, 40) + '...';
+                        
+                        // Status badge
+                        const lower = String(val).toLowerCase();
+                        if (lower.includes('configurado') || lower === 'sí') {
+                            return `<td class="px-4 py-3"><span class="px-2 py-1 bg-green-500/20 text-green-400 rounded-full text-xs">${val}</span></td>`;
+                        } else if (lower.includes('pdte') || lower.includes('pendiente')) {
+                            return `<td class="px-4 py-3"><span class="px-2 py-1 bg-amber-500/20 text-amber-400 rounded-full text-xs">${val}</span></td>`;
+                        }
+                        return `<td class="px-4 py-3 text-slate-300">${val}</td>`;
+                    }).join('')}
+                </tr>
+            `).join('');
+
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            document.getElementById('recordCount').textContent = `${filteredData.length} registros`;
+            document.getElementById('pagination').innerHTML = `
+                <button onclick="changePage(-1)" ${currentPage === 1 ? 'disabled' : ''} class="px-4 py-2 bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition">
+                    ← Anterior
+                </button>
+                <span class="text-slate-400">Página ${currentPage} de ${totalPages || 1}</span>
+                <button onclick="changePage(1)" ${currentPage >= totalPages ? 'disabled' : ''} class="px-4 py-2 bg-slate-700 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-600 transition">
+                    Siguiente →
+                </button>
+            `;
+        }
+
+        function changePage(delta) {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            currentPage = Math.max(1, Math.min(totalPages, currentPage + delta));
+            renderTable();
+        }
+
+        function toggleTheme() {
+            document.documentElement.classList.toggle('dark');
+        }
+
+        // Drag and drop
+        document.addEventListener('DOMContentLoaded', () => {
+            const body = document.body;
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                body.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); });
+            });
+            body.addEventListener('drop', e => {
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    const input = document.getElementById('fileInput');
+                    const dt = new DataTransfer();
+                    dt.items.add(file);
+                    input.files = dt.files;
+                    handleFileUpload({ target: input });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
